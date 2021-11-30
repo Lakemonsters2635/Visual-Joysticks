@@ -7,6 +7,7 @@ import pyvjoy
 # pinky disable drive
 # deal with going too far off screen, especially on left edge
 # Increase reliability of thumb
+# Try to eliminate spurious hands by setting a higher threshold
 
 joystick = pyvjoy.VJoyDevice(1)
 
@@ -144,6 +145,9 @@ while True:
     # int(driveHandsMinY * h))          -1.0
     # int(driveHandsMaxY * h))          +1.0
 
+    sawLeftDrive = False
+    sawRightDrive = False
+
     if results.multi_hand_landmarks:
         # print('Handedness:', results.multi_handedness)
         # print(results.multi_handedness[0])
@@ -156,7 +160,7 @@ while True:
             handLms = results.multi_hand_landmarks[handID]
             # print(results.multi_handedness[handID])
             fup = fingersUp(results.multi_handedness[handID].classification[0].label, handLms.landmark)
-            print(bin(fup))
+            # print(bin(fup))
             which = ""
 
             for Id, lm in enumerate(handLms.landmark):
@@ -173,6 +177,7 @@ while True:
                             tempPixelMapping = mapPixelPercentToThrottle(1 - lm.x, driveLeftHandMinX, driveLeftHandMaxX)
                             joystick.set_axis(pyvjoy.HID_USAGE_X, int(16384 * (1 + tempPixelMapping)))
                             which = "Left"
+                            sawLeftDrive = True
                             # print(tempPixelMapping)
                         else:
                             cv2.circle(img, (cx, cy), 15, (0, 255, 0), cv2.FILLED)
@@ -189,6 +194,7 @@ while True:
                         tempPixelMapping = mapPixelPercentToThrottle(1 - lm.x, driveRightHandMinX, driveRightHandMaxX)
                         joystick.set_axis(pyvjoy.HID_USAGE_RX, int(16384 * (1 + tempPixelMapping)))
                         which = "Right"
+                        sawRightDrive = True
                         # print(tempPixelMapping)
 
             if which == "Right":
@@ -199,6 +205,14 @@ while True:
                 set_buttons(gameToolButtons, fup)
 
             mpDraw.draw_landmarks(img, handLms, mpHands.HAND_CONNECTIONS)
+
+    if not sawRightDrive:
+        joystick.set_axis(pyvjoy.HID_USAGE_RY, 16384)
+        joystick.set_axis(pyvjoy.HID_USAGE_RX, 16384)
+
+    if not sawLeftDrive:
+        joystick.set_axis(pyvjoy.HID_USAGE_Y, 16384)
+        joystick.set_axis(pyvjoy.HID_USAGE_X, 16384)
 
     cTime = time.time()
     fps = 1 / (cTime - pTime)
