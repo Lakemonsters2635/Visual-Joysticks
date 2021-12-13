@@ -3,13 +3,56 @@ import cv2.cv2
 import mediapipe as mp
 import time
 import pyvjoy
+from networktables import NetworkTables
+from networktables import NetworkTablesInstance
 
 # pinky disable drive
 # deal with going too far off screen, especially on left edge
 # Increase reliability of thumb
 # Try to eliminate spurious hands by setting a higher threshold
 
+useNetworkTables = True
+
+
+hidNames = {
+    pyvjoy.HID_USAGE_X: "Axis-0",
+    pyvjoy.HID_USAGE_Y: "Axis-1",
+    pyvjoy.HID_USAGE_Z: "Axis-2",
+    pyvjoy.HID_USAGE_RX: "Axis-3",
+    pyvjoy.HID_USAGE_RY: "Axis-4",
+    pyvjoy.HID_USAGE_RZ: "Axis-5",
+    pyvjoy.HID_USAGE_SL0: "Slider-0",
+    pyvjoy.HID_USAGE_SL1: "Slider-1"
+}
+print(hidNames)
+
 joystick = pyvjoy.VJoyDevice(1)
+
+if useNetworkTables:
+    ntinst = NetworkTablesInstance.getDefault()
+
+    print("Setting up NetworkTables client for team {}".format(2635))
+    ntinst.startClientTeam(2635)
+    ntinst.startDSClient()
+
+    sd = NetworkTables.getTable("SmartDashboard")
+    print(sd)
+
+
+def setAxis(whichAxis, value):
+    if useNetworkTables:
+        # print(whichAxis)
+        sd.putValue("vJoy/{0}".format(hidNames[whichAxis]), value)
+    else:
+        joystick.set_axis(whichAxis, value)
+
+
+def setButton(whichButton, value):
+    if useNetworkTables:
+        sd.putValue("vJoy/Button-{0}".format(whichButton), value)
+    else:
+        joystick.set_button(whichButton, value)
+
 
 xSpacing = 0.166
 
@@ -44,6 +87,7 @@ rightDriveButton = [[], [2], [3], [2, 3], [], [], [], [], [], [], [], [], [], []
                     [], [], [], [], [], [], [], [], [], []]
 gameToolButtons = [[], [4], [5], [4, 5], [6], [6, 4], [6, 4, 5], [], [], [], [], [], [], [], [], [], [], [7, 4], [7, 5],
                    [7, 4, 5], [7, 6], [7, 6, 4], [7, 6, 4, 5], [], [], [], [], [], [], [], [], [], []]
+
 
 # Thumb is sensitive to hand orientation.
 # Solution:
@@ -81,11 +125,11 @@ def set_buttons(buttons, Fup):
 
     for b in buttonsToSet:
         # print("Set: ", b)
-        joystick.set_button(b + 1, True)
+        setButton(b + 1, True)
 
     for b in buttonsToClear:
         # print("Clear: ", b)
-        joystick.set_button(b + 1, False)
+        setButton(b + 1, False)
 
 
 cap = cv2.cv2.VideoCapture(0)
@@ -173,26 +217,26 @@ while True:
                         if lm.x > 0.5:
                             cv2.circle(img, (cx, cy), 15, (255, 0, 0), cv2.FILLED)
                             tempPixelMapping = mapPixelPercentToThrottle(lm.y, driveHandsMinY, driveHandsMaxY)
-                            joystick.set_axis(pyvjoy.HID_USAGE_Y, int(16384 * (1 + tempPixelMapping)))
+                            setAxis(pyvjoy.HID_USAGE_Y, int(16384 * (1 + tempPixelMapping)))
                             tempPixelMapping = mapPixelPercentToThrottle(1 - lm.x, driveLeftHandMinX, driveLeftHandMaxX)
-                            joystick.set_axis(pyvjoy.HID_USAGE_X, int(16384 * (1 + tempPixelMapping)))
+                            setAxis(pyvjoy.HID_USAGE_X, int(16384 * (1 + tempPixelMapping)))
                             which = "Left"
                             sawLeftDrive = True
                             # print(tempPixelMapping)
                         else:
                             cv2.circle(img, (cx, cy), 15, (0, 255, 0), cv2.FILLED)
                             tempPixelMapping = mapPixelPercentToThrottle(lm.y, driveHandsMinY, driveHandsMaxY)
-                            joystick.set_axis(pyvjoy.HID_USAGE_RZ, int(16384 * (1 + tempPixelMapping)))
+                            setAxis(pyvjoy.HID_USAGE_RZ, int(16384 * (1 + tempPixelMapping)))
                             tempPixelMapping = mapPixelPercentToThrottle(1 - lm.x, gameToolHandMinX, gameToolHandMaxX)
-                            joystick.set_axis(pyvjoy.HID_USAGE_Z, int(16384 * (1 + tempPixelMapping)))
+                            setAxis(pyvjoy.HID_USAGE_Z, int(16384 * (1 + tempPixelMapping)))
                             which = "Drive"
 
                     if results.multi_handedness[handID].classification[0].label == "Left":
                         cv2.circle(img, (cx, cy), 15, (0, 0, 255), cv2.FILLED)
                         tempPixelMapping = mapPixelPercentToThrottle(lm.y, driveHandsMinY, driveHandsMaxY)
-                        joystick.set_axis(pyvjoy.HID_USAGE_RY, int(16384 * (1 + tempPixelMapping)))
+                        setAxis(pyvjoy.HID_USAGE_RY, int(16384 * (1 + tempPixelMapping)))
                         tempPixelMapping = mapPixelPercentToThrottle(1 - lm.x, driveRightHandMinX, driveRightHandMaxX)
-                        joystick.set_axis(pyvjoy.HID_USAGE_RX, int(16384 * (1 + tempPixelMapping)))
+                        setAxis(pyvjoy.HID_USAGE_RX, int(16384 * (1 + tempPixelMapping)))
                         which = "Right"
                         sawRightDrive = True
                         # print(tempPixelMapping)
@@ -207,12 +251,15 @@ while True:
             mpDraw.draw_landmarks(img, handLms, mpHands.HAND_CONNECTIONS)
 
     if not sawRightDrive:
-        joystick.set_axis(pyvjoy.HID_USAGE_RY, 16384)
-        joystick.set_axis(pyvjoy.HID_USAGE_RX, 16384)
+        setAxis(pyvjoy.HID_USAGE_RY, 16384)
+        setAxis(pyvjoy.HID_USAGE_RX, 16384)
 
     if not sawLeftDrive:
-        joystick.set_axis(pyvjoy.HID_USAGE_Y, 16384)
-        joystick.set_axis(pyvjoy.HID_USAGE_X, 16384)
+        setAxis(pyvjoy.HID_USAGE_Y, 16384)
+        setAxis(pyvjoy.HID_USAGE_X, 16384)
+
+    if useNetworkTables:
+        ntinst.flush()
 
     cTime = time.time()
     fps = 1 / (cTime - pTime)
